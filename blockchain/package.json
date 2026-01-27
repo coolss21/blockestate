@@ -1,0 +1,15 @@
+{
+  "name": "propertychain-blockchain",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "node": "npx hardhat node",
+    "compile": "npx hardhat compile",
+    "deploy": "npx hardhat run scripts/deploy.cjs --network localhost",
+    "export": "node scripts/export-abis.cjs"
+  },
+  "devDependencies": {
+    "hardhat": "^2.22.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0"
+  }
+}
