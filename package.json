@@ -1,0 +1,22 @@
+{
+    "name": "blockestate-fullstack",
+    "version": "1.0.0",
+    "description": "BlockEstate - Complete Land Registry System with Blockchain",
+    "private": true,
+    "scripts": {
+        "chain": "cd blockchain && npm run node",
+        "deploy": "cd blockchain && npm run deploy && npm run export",
+        "backend": "cd backend && npm run dev",
+        "frontend": "cd frontend && npm run dev"
+    },
+    "keywords": [
+        "blockchain",
+        "land-registry",
+        "hardhat",
+        "ethereum",
+        "mongodb",
+        "react"
+    ],
+    "author": "",
+    "license": "MIT"
+}
