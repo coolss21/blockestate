@@ -7,14 +7,17 @@ const ApplicationDetails = () => {
     const { id } = useParams(); // This is the appId (APP-xxx) not MongoDB _id
     const navigate = useNavigate();
     const [application, setApplication] = useState(null);
+    const [approvalHistory, setApprovalHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [rejectionReason, setRejectionReason] = useState('');
     const [showRejectModal, setShowRejectModal] = useState(false);
+    const [comment, setComment] = useState('');
     const [error, setError] = useState('');
 
     useEffect(() => {
         fetchDetails();
+        fetchApprovalHistory();
     }, [id]);
 
     const fetchDetails = async () => {
@@ -30,13 +33,30 @@ const ApplicationDetails = () => {
         }
     };
 
+    const fetchApprovalHistory = async () => {
+        try {
+            const response = await apiClient.get(`/registrar/application/${id}/approvals`);
+            setApprovalHistory(response.data.approvals || []);
+        } catch (error) {
+            console.error('Failed to load approval history:', error);
+        }
+    };
+
     const handleApprove = async () => {
-        if (!window.confirm('Are you sure you want to approve and register this property on the blockchain?')) return;
+        if (!window.confirm('Are you sure you want to approve this application?')) return;
 
         setProcessing(true);
         try {
-            const response = await apiClient.post(`/registrar/application/${application.appId || application._id}/approve`);
-            alert(`Application Approved!\n\nProperty ID: ${response.data.property?.propertyId}\nTransaction: ${response.data.property?.txHash || 'Pending'}`);
+            const response = await apiClient.post(`/registrar/application/${application.appId || application._id}/approve`, {
+                comment: comment || ''
+            });
+
+            if (response.data.status === 'approved') {
+                alert(`✅ Application fully approved!\n\nProperty ID: ${response.data.property?.propertyId}\nTransaction: ${response.data.property?.txHash}`);
+            } else {
+                alert(`✅ Your approval has been recorded.\n\n${response.data.approvalProgress?.remaining || 0} more approval(s) needed.`);
+            }
+
             navigate('/registrar/inbox');
         } catch (error) {
             alert('Approval failed: ' + (error.response?.data?.error || error.message));
@@ -128,8 +148,8 @@ const ApplicationDetails = () => {
                     </div>
                     <div className="flex items-center gap-4 bg-slate-900 px-5 py-2.5 rounded-2xl shadow-xl shadow-slate-900/10">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">State:</p>
-                        <span className={`badge-${status === 'pending' ? 'warning' : status === 'approved' ? 'success' : 'danger'} scale-90`}>
-                            {status}
+                        <span className={`badge-${status === 'pending' ? 'warning' : status === 'under-review' ? 'info' : status === 'approved' ? 'success' : 'danger'} scale-90`}>
+                            {status.replace('-', ' ')}
                         </span>
                     </div>
                 </div>
@@ -215,6 +235,63 @@ const ApplicationDetails = () => {
 
                     {/* Sidebar: Documents & Actions */}
                     <div className="space-y-10">
+                        {/* Approval Progress */}
+                        {application.approvalMetadata && (
+                            <div className="card p-10 bg-blue-50 border-0 shadow-xl shadow-blue-900/5 ring-1 ring-blue-100">
+                                <h3 className="text-[10px] font-black text-blue-900 uppercase tracking-[0.4em] mb-6 italic text-center">Approval Progress</h3>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-black text-blue-700 uppercase tracking-widest">Progress</span>
+                                        <span className="text-sm font-black text-blue-900">
+                                            {application.approvalMetadata.approvedCount || 0} / {application.approvalMetadata.requiredApprovals || 2}
+                                        </span>
+                                    </div>
+                                    <div className="w-full bg-blue-100 rounded-full h-3">
+                                        <div
+                                            className="bg-blue-600 h-3 rounded-full transition-all duration-500"
+                                            style={{
+                                                width: `${((application.approvalMetadata.approvedCount || 0) / (application.approvalMetadata.requiredApprovals || 2)) * 100}%`
+                                            }}
+                                        ></div>
+                                    </div>
+                                    {application.approvalMetadata.requiredApprovals - (application.approvalMetadata.approvedCount || 0) > 0 && (
+                                        <p className="text-xs font-bold text-blue-600 italic text-center">
+                                            {application.approvalMetadata.requiredApprovals - (application.approvalMetadata.approvedCount || 0)} more approval(s) needed
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Approval History */}
+                        {approvalHistory.length > 0 && (
+                            <div className="card p-10 bg-white border-0 shadow-xl shadow-slate-900/5 ring-1 ring-slate-100">
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-6 italic text-center">Approval History</h3>
+                                <div className="space-y-4">
+                                    {approvalHistory.map((approval, index) => (
+                                        <div key={index} className="flex items-start gap-4 pb-4 border-b border-slate-100 last:border-b-0">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                                approval.decision === 'approved' ? 'bg-emerald-500' : 'bg-rose-500'
+                                            }`}>
+                                                <span className="text-white text-sm font-black">
+                                                    {approval.decision === 'approved' ? '✓' : '✗'}
+                                                </span>
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-black text-slate-900">{approval.registrar?.name || 'Unknown'}</p>
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{approval.registrar?.email || ''}</p>
+                                                {approval.comment && (
+                                                    <p className="text-xs font-bold text-slate-600 italic mt-2">"{approval.comment}"</p>
+                                                )}
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">
+                                                    {new Date(approval.timestamp).toLocaleString()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="card p-10 bg-slate-900 border-0 shadow-2xl shadow-slate-900/20 ring-1 ring-white/10">
                             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-8 flex items-center gap-3">
                                 <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
@@ -275,16 +352,23 @@ const ApplicationDetails = () => {
                         </div>
 
                         {/* Registry Authority Decisions */}
-                        {status === 'pending' && (
+                        {(status === 'pending' || status === 'under-review') && (
                             <div className="card p-10 bg-white border-0 shadow-2xl shadow-blue-900/10 ring-1 ring-blue-50">
                                 <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em] mb-8 text-center italic">Administrative Authority</h3>
                                 <div className="space-y-4">
+                                    <textarea
+                                        className="w-full bg-slate-50 border-slate-200 border-2 rounded-2xl p-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                                        placeholder="Add comment (optional)..."
+                                        rows="3"
+                                        value={comment}
+                                        onChange={(e) => setComment(e.target.value)}
+                                    />
                                     <button
                                         onClick={handleApprove}
                                         disabled={processing}
                                         className="w-full btn-primary h-16 text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-blue-900/20 bg-blue-600 border-blue-600 hover:bg-blue-700 hover:border-blue-700"
                                     >
-                                        {processing ? 'Signing Ledger...' : 'Commit to Blockchain'}
+                                        {processing ? 'Processing...' : status === 'under-review' ? 'Add Approval' : 'Approve Application'}
                                     </button>
                                     <button
                                         onClick={() => setShowRejectModal(true)}

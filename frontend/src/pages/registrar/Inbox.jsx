@@ -7,8 +7,9 @@ const Inbox = () => {
     const navigate = useNavigate();
     const [applications, setApplications] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState('pending');
+    const [statusFilter, setStatusFilter] = useState('');
     const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+    const [multiStepEnabled, setMultiStepEnabled] = useState(false);
 
     useEffect(() => {
         fetchApplications();
@@ -17,8 +18,10 @@ const Inbox = () => {
     const fetchApplications = async () => {
         try {
             setLoading(true);
-            const response = await apiClient.get(`/registrar/inbox?status=${statusFilter}&limit=20`);
+            const query = statusFilter ? `?status=${statusFilter}&limit=20` : '?limit=20';
+            const response = await apiClient.get(`/registrar/inbox${query}`);
             setApplications(response.data.applications || []);
+            setMultiStepEnabled(response.data.multiStepEnabled || false);
             setPagination({
                 page: response.data.page || 1,
                 totalPages: response.data.totalPages || 1,
@@ -49,6 +52,7 @@ const Inbox = () => {
     const getStatusBadgeClass = (status) => {
         const classes = {
             pending: 'badge-warning',
+            'under-review': 'badge-info',
             approved: 'badge-success',
             rejected: 'badge-danger'
         };
@@ -61,8 +65,15 @@ const Inbox = () => {
             <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 mb-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
                     <div>
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic opacity-90">Application Inbox</h1>
-                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] mt-0.5">Verification & Registry Pipeline</p>
+                        <div>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic opacity-90">Application Inbox</h1>
+                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] mt-0.5">Verification & Registry Pipeline</p>
+                            {multiStepEnabled && (
+                                <span className="inline-block mt-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-[9px] font-black uppercase tracking-widest">
+                                    Multi-Step Approval Enabled
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <div className="flex items-center gap-6">
                         <div className="relative group">
@@ -73,6 +84,7 @@ const Inbox = () => {
                             >
                                 <option value="" className="bg-slate-900">Global Ledger</option>
                                 <option value="pending" className="bg-slate-900">Pending Review</option>
+                                <option value="under-review" className="bg-slate-900">Under Review</option>
                                 <option value="approved" className="bg-slate-900">Finalized Assets</option>
                                 <option value="rejected" className="bg-slate-900">Declined Dockets</option>
                             </select>
@@ -117,6 +129,9 @@ const Inbox = () => {
                                         <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Authority / Entity</th>
                                         <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Geospatial Link</th>
                                         <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Registry State</th>
+                                        {multiStepEnabled && (
+                                            <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Approvals</th>
+                                        )}
                                         <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sync Date</th>
                                         <th className="px-8 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Process</th>
                                     </tr>
@@ -151,9 +166,16 @@ const Inbox = () => {
                                             </td>
                                             <td className="px-6 py-6">
                                                 <span className={`badge-${getStatusBadgeClass(app.status)} scale-90`}>
-                                                    {app.status}
+                                                    {app.status.replace('-', ' ')}
                                                 </span>
                                             </td>
+                                            {multiStepEnabled && (
+                                                <td className="px-6 py-6">
+                                                    <span className="text-xs font-black text-slate-600">
+                                                        {app.approvalMetadata?.approvedCount || 0} / {app.approvalMetadata?.requiredApprovals || 2}
+                                                    </span>
+                                                </td>
+                                            )}
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col">
                                                     <span className="text-xs font-black text-slate-600 font-mono">

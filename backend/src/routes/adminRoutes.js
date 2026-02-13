@@ -373,4 +373,171 @@ router.get('/audit', requireAuth(['admin']), async (req, res) => {
     }
 });
 
+/**
+ * PUT /api/admin/config/approval-settings - Update multi-step approval configuration
+ */
+router.put('/config/approval-settings', requireAuth(['admin']), async (req, res) => {
+    try {
+        const { enabled, requiredApprovals, approvalType, assignedRegistrars } = req.body;
+        const userId = req.user.sub;
+
+        // Validate
+        if (requiredApprovals !== undefined && (requiredApprovals < 1 || requiredApprovals > 5)) {
+            return res.status(400).json({
+                error: 'Required approvals must be between 1 and 5'
+            });
+        }
+
+        if (approvalType && !['parallel', 'sequential'].includes(approvalType)) {
+            return res.status(400).json({
+                error: 'Approval type must be parallel or sequential'
+            });
+        }
+
+        // Update config
+        let config = await OfficeConfig.findOne({ officeId: 'default-office' });
+
+        if (!config) {
+            config = new OfficeConfig({ officeId: 'default-office' });
+        }
+
+        if (!config.configData) {
+            config.configData = {};
+        }
+
+        config.configData.multiStepApproval = {
+            enabled: enabled !== undefined ? enabled : (config.configData.multiStepApproval?.enabled ?? true),
+            requiredApprovals: requiredApprovals || config.configData.multiStepApproval?.requiredApprovals || 2,
+            approvalType: approvalType || config.configData.multiStepApproval?.approvalType || 'parallel',
+            assignedRegistrars: assignedRegistrars || config.configData.multiStepApproval?.assignedRegistrars || [],
+            autoAssignment: config.configData.multiStepApproval?.autoAssignment || false,
+            allowSelfRejection: config.configData.multiStepApproval?.allowSelfRejection ?? true
+        };
+
+        await config.save();
+
+        // Log change
+        await AuditService.logAction({
+            userId,
+            role: 'admin',
+            action: 'UPDATE_APPROVAL_SETTINGS',
+            details: {
+                enabled,
+                requiredApprovals,
+                approvalType
+            },
+            req
+        });
+
+        res.json({
+            message: 'Approval settings updated successfully',
+            settings: config.configData.multiStepApproval
+        });
+    } catch (error) {
+        console.error('Update settings error:', error);
+        res.status(500).json({ error: 'Failed to update settings' });
+    }
+});
+
+/**
+ * GET /api/admin/config/approval-settings - Get current approval settings
+ */
+router.get('/config/approval-settings', requireAuth(['admin']), async (req, res) => {
+    try {
+        const config = await OfficeConfig.findOne({ officeId: 'default-office' });
+
+        const settings = config?.configData?.multiStepApproval || {
+            enabled: true,
+            requiredApprovals: 2,
+            approvalType: 'parallel',
+            assignedRegistrars: [],
+            autoAssignment: false,
+            allowSelfRejection: true
+        };
+
+        res.json({ settings });
+    } catch (error) {
+        console.error('Get settings error:', error);
+        res.status(500).json({ error: 'Failed to load settings' });
+    }
+});
+
+/**
+ * GET /api/admin/applications/approval-stats - Get statistics about multi-step approvals
+ */
+router.get('/applications/approval-stats', requireAuth(['admin']), async (req, res) => {
+    try {
+        const Application = (await import('../models/Application.js')).default;
+
+        const [
+            totalApplications,
+            underReview,
+            approved,
+            rejected,
+            averageApprovalTime,
+            approvalsByRegistrar
+        ] = await Promise.all([
+            Application.countDocuments(),
+            Application.countDocuments({ status: 'under-review' }),
+            Application.countDocuments({ status: 'approved' }),
+            Application.countDocuments({ status: 'rejected' }),
+
+            // Average time from submission to final approval
+            Application.aggregate([
+                { $match: { status: 'approved', 'approvalMetadata.finalApprovedAt': { $exists: true } } },
+                {
+                    $project: {
+                        approvalTime: {
+                            $subtract: ['$approvalMetadata.finalApprovedAt', '$createdAt']
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        avgTime: { $avg: '$approvalTime' }
+                    }
+                }
+            ]),
+
+            // Count approvals by each registrar
+            Application.aggregate([
+                { $unwind: '$approvals' },
+                { $match: { 'approvals.decision': 'approved' } },
+                {
+                    $group: {
+                        _id: '$approvals.registrarId',
+                        count: { $sum: 1 },
+                        registrarName: { $first: '$approvals.registrarName' }
+                    }
+                },
+                { $sort: { count: -1 } }
+            ])
+        ]);
+
+        const avgApprovalHours = averageApprovalTime[0]?.avgTime
+            ? Math.round(averageApprovalTime[0].avgTime / (1000 * 60 * 60))
+            : 0;
+
+        res.json({
+            totalApplications,
+            byStatus: {
+                underReview,
+                approved,
+                rejected,
+                pending: totalApplications - underReview - approved - rejected
+            },
+            averageApprovalTime: `${avgApprovalHours} hours`,
+            topApprovers: approvalsByRegistrar.slice(0, 5).map(a => ({
+                registrarId: a._id,
+                name: a.registrarName,
+                approvalsCount: a.count
+            }))
+        });
+    } catch (error) {
+        console.error('Get stats error:', error);
+        res.status(500).json({ error: 'Failed to load statistics' });
+    }
+});
+
 export default router;
