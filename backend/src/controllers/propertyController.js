@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import QRCode from 'qrcode';
-import { PUBLIC_BASE } from '../config/index.js';
+import { BACKEND_URL } from '../config/index.js';
 import { sha256Hex } from '../utils/hash.js';
 import { BlockchainService } from '../services/blockchainService.js';
 import { IpfsService } from '../services/ipfsService.js';
@@ -25,18 +25,12 @@ function getLocalIp() {
 }
 
 function getQrUrl(propertyId) {
-  let host = PUBLIC_BASE;
-  if (host.includes('localhost') || host.includes('127.0.0.1')) {
-    host = `http://${getLocalIp()}:5173`;
-  } else {
-    host = process.env.FRONTEND_ORIGIN || host;
-  }
-  return `${host.replace(/\/$/, '')}/certificate/${encodeURIComponent(propertyId)}`;
+  return `${BACKEND_URL.replace(/\/$/, '')}/certificates/${encodeURIComponent(propertyId)}.pdf`;
 }
 
 export const PropertyController = {
   async health(_req, res) {
-    return res.json({ ok: true, base: PUBLIC_BASE });
+    return res.json({ ok: true, base: BACKEND_URL });
   },
 
   async get(req, res) {

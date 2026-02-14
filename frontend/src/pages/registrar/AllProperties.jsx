@@ -1,6 +1,7 @@
 // pages/registrar/AllProperties.jsx - List of all registered properties
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import apiClient from '../../config/api';
 import HistoryModal from '../../components/HistoryModal';
 import QRModal from '../../components/QRModal';
@@ -61,7 +62,7 @@ const AllProperties = () => {
             link.remove();
         } catch (error) {
             console.error('PDF Download failed:', error);
-            alert('Failed to generate PDF. Please try again.');
+            toast.error('Failed to generate PDF. Please try again.');
         }
     };
 

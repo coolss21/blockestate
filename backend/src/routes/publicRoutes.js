@@ -3,38 +3,11 @@ import QRCode from 'qrcode';
 import os from 'os';
 import { CertificateController } from '../controllers/certificateController.js';
 import Property from '../models/Properties.js';
+import { BACKEND_URL } from '../config/index.js';
 
 const r = Router();
 
-function getLanIpV4() {
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] || []) {
-      if (net && net.family === 'IPv4' && !net.internal) return net.address;
-    }
-  }
-  return null;
-}
-
-function derivePublicBase(req) {
-  const host = String(req.get('host') || '').trim();
-  const protocol = String(req.protocol || 'http').trim();
-
-  // Priority 1: User defined Frontend Origin
-  if (process.env.FRONTEND_ORIGIN) return process.env.FRONTEND_ORIGIN.replace(/\/$/, '');
-
-  const isLocalhost = /^localhost(?::\d+)?$/i.test(host) || /^127\.0\.0\.1(?::\d+)?$/.test(host);
-
-  // If request hits backend (e.g. via local IP 192.168.x.x:8081), point QR to frontend port 5173
-  if (host.includes(':8081')) {
-    return `${protocol}://${host.split(':')[0]}:5173`;
-  }
-
-  if (!isLocalhost) return `${protocol}://${host}`;
-
-  const ip = getLanIpV4();
-  return ip ? `${protocol}://${ip}:5173` : `${protocol}://${host.replace(':8081', ':5173')}`;
-}
+// Removed deriveBackendBase - utilizing BACKEND_URL from config directly
 
 // Public certificate (no token) -> shareable
 r.get('/certificate/:id.pdf', CertificateController.publicPdf);
@@ -67,8 +40,10 @@ r.get('/qr/:id', async (req, res) => {
     const propertyId = String(req.params.id || '').trim();
     if (!propertyId) return res.status(400).send('Missing propertyId');
 
-    const base = derivePublicBase(req);
-    const url = `${base}/certificate/${encodeURIComponent(propertyId)}`;
+    // Point to backend certificate endpoint (Static File)
+    const url = `${BACKEND_URL}/certificates/${encodeURIComponent(propertyId)}.pdf`;
+
+    console.log(`[QR] Generated URL: ${url}`); // Debug logging
 
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'no-store');

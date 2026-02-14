@@ -6,7 +6,16 @@ import os from 'os';
 import { BlockchainService } from './blockchainService.js';
 import { IpfsService } from './ipfsService.js';
 import { shortHex } from '../utils/hash.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { BACKEND_URL } from '../config/index.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STORAGE_DIR = path.join(__dirname, '../storage/certificates');
+
+// Helper to get status label
 function statusLabel(n) {
   return Number(n) === 1 ? 'DISPUTED' : 'CLEAR';
 }
@@ -14,27 +23,6 @@ function statusLabel(n) {
 function shortAddr(a) {
   if (!a) return '';
   return `${a.slice(0, 6)}...${a.slice(-4)}`;
-}
-
-function getLanIpV4() {
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] || []) {
-      if (net && net.family === 'IPv4' && !net.internal) return net.address;
-    }
-  }
-  return null;
-}
-
-// ✅ Produces LAN-safe base URL even if request came via localhost.
-function derivePublicBase(req) {
-  const host = String(req.get('host') || '').trim();
-  const protocol = String(req.protocol || 'http').trim();
-  const isLocalhost = /^localhost(?::\d+)?$/i.test(host) || /^127\.0\.0\.1(?::\d+)?$/.test(host);
-  if (!isLocalhost) return `${protocol}://${host}`;
-  const ip = getLanIpV4();
-  const port = host.includes(':') ? host.split(':')[1] : '8081';
-  return ip ? `${protocol}://${ip}:${port}` : `${protocol}://${host}`;
 }
 
 async function findRegistrationEvent(propertyId, lookbackBlocks = 200000) {
@@ -68,11 +56,12 @@ async function buildPayload(propertyId, req) {
   const cid = IpfsService.extractCid(p.fileRef);
   const regEv = await findRegistrationEvent(propertyId);
 
-  const base = derivePublicBase(req); // ✅ LAN-safe
+  const base = BACKEND_URL; // ✅ Use Env
 
   // NOTE: routes mounted under /api
-  const publicCertificateUrl = `${base}/api/public/certificate/${encodeURIComponent(propertyId)}.pdf`;
-  const publicVerifyUrl = `${base}/api/public/verify?propertyId=${encodeURIComponent(propertyId)}`;
+  const publicCertificateUrl = `${base}/certificates/${encodeURIComponent(propertyId)}.pdf`;
+  // QR Code points to the static PDF file per requirements
+  const publicVerifyUrl = publicCertificateUrl;
 
   return {
     propertyId,
@@ -211,7 +200,7 @@ async function renderPublicCertificatePdfBuffer({ propertyId, req }) {
       const boxTop = doc.y + 12;
 
       // QR code (links to public verify page)
-      const qrPng = await QRCode.toBuffer(payload.urls.verify, { width: 250, margin: 1 });
+      const qrPng = await QRCode.toBuffer(payload.urls.certificate, { width: 250, margin: 1 });
       doc.image(qrPng, 70, boxTop + 20, { width: 130 });
       doc.fontSize(10).fillColor('#111111').text('Scan to verify online', 70, boxTop + 155);
 
@@ -293,6 +282,18 @@ function sendPdfBuffer(req, res, propertyId, pdfBuffer) {
 // Controllers call this
 async function generateCertificatePdf({ propertyId, req, res /*, isPublic */ }) {
   const { pdfBuffer } = await renderPublicCertificatePdfBuffer({ propertyId, req });
+
+  // Save to backend storage for static serving
+  try {
+    if (!fs.existsSync(STORAGE_DIR)) {
+      fs.mkdirSync(STORAGE_DIR, { recursive: true });
+    }
+    const filePath = path.join(STORAGE_DIR, `${propertyId}.pdf`);
+    fs.writeFileSync(filePath, pdfBuffer);
+  } catch (err) {
+    console.error('Failed to save certificate PDF to storage:', err);
+  }
+
   return sendPdfBuffer(req, res, propertyId, pdfBuffer);
 }
 

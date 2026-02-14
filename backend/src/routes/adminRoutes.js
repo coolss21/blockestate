@@ -7,7 +7,7 @@ import Property from '../models/Properties.js';
 import Dispute from '../models/Dispute.js';
 import OfficeConfig from '../models/Office.js';
 import { AuditService } from '../services/auditService.js';
-
+import Application from '../models/Application.js';
 import AuditLog from '../models/AuditLog.js';
 
 const router = Router();
@@ -17,7 +17,14 @@ const router = Router();
  */
 router.get('/dashboard', requireAuth(['admin']), async (req, res) => {
     try {
-        const [userCounts, propertiesCount, disputesCount, propertyStats, propertyStatusStats, totalValuation, districtStats, recentLogs] = await Promise.all([
+
+        const [
+            userCounts, propertiesCount, disputesCount,
+            propertyStats, propertyStatusStats, totalValuation,
+            districtStats, recentLogs,
+            // Anomaly queries
+            rejectedAppsByMonth, disputedByDistrict, applicationStatusCounts
+        ] = await Promise.all([
             User.aggregate([
                 { $group: { _id: '$role', count: { $sum: 1 } } }
             ]),
@@ -60,7 +67,45 @@ router.get('/dashboard', requireAuth(['admin']), async (req, res) => {
                 .sort({ timestamp: -1 })
                 .limit(5)
                 .populate('userId', 'name email')
-                .lean()
+                .lean(),
+
+            // ── Anomaly: Rejected/flagged applications per month (past 12 months) ──
+            Application.aggregate([
+                {
+                    $match: {
+                        status: { $in: ['rejected'] },
+                        createdAt: { $gte: new Date(new Date().setMonth(new Date().getMonth() - 12)) }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            month: { $month: '$createdAt' },
+                            year: { $year: '$createdAt' }
+                        },
+                        count: { $sum: 1 }
+                    }
+                },
+                { $sort: { '_id.year': 1, '_id.month': 1 } }
+            ]),
+
+            // ── Anomaly: Disputed + Rejected properties by district ──
+            Property.aggregate([
+                { $match: { status: { $in: ['disputed', 'rejected'] } } },
+                {
+                    $group: {
+                        _id: '$address.district',
+                        flagged: { $sum: 1 }
+                    }
+                },
+                { $sort: { flagged: -1 } },
+                { $limit: 10 }
+            ]),
+
+            // ── Risk distribution: count applications by status ──
+            Application.aggregate([
+                { $group: { _id: '$status', count: { $sum: 1 } } }
+            ])
         ]);
 
         const usersByRole = userCounts.reduce((acc, curr) => {
@@ -84,6 +129,38 @@ router.get('/dashboard', requireAuth(['admin']), async (req, res) => {
             count: s.count
         }));
 
+        // ── Build anomaly response data ──
+
+        // 1. Abnormal registrations over time (rejected apps per month)
+        const abnormalRegistrations = rejectedAppsByMonth.map(s => ({
+            month: `${months[s._id.month - 1]} ${s._id.year}`,
+            anomalies: s.count
+        }));
+
+        // 2. Abnormal transfers per region (disputed/rejected properties by district)
+        const abnormalTransfers = disputedByDistrict.map(s => ({
+            region: s._id || 'Unknown',
+            flagged: s.flagged
+        }));
+
+        // 3. Risk distribution mapped from application statuses
+        const riskMap = {
+            'pending': 'Low Risk',
+            'under-review': 'Medium Risk',
+            'rejected': 'High Risk',
+            'approved': 'Low Risk'
+        };
+        const riskAgg = {};
+        applicationStatusCounts.forEach(s => {
+            const label = riskMap[s._id] || 'Medium Risk';
+            riskAgg[label] = (riskAgg[label] || 0) + s.count;
+        });
+        // Also blend in disputed properties as Critical
+        const disputedTotal = disputedByDistrict.reduce((sum, d) => sum + d.flagged, 0);
+        if (disputedTotal > 0) riskAgg['Critical'] = (riskAgg['Critical'] || 0) + disputedTotal;
+
+        const riskDistribution = Object.entries(riskAgg).map(([name, value]) => ({ name, value }));
+
         res.json({
             users: usersByRole,
             totalUsers: Object.values(usersByRole).reduce((a, b) => a + b, 0),
@@ -93,9 +170,14 @@ router.get('/dashboard', requireAuth(['admin']), async (req, res) => {
             analytics,
             statusAnalytics: propertyStatusAnalytics,
             districtAnalytics,
-            recentLogs
+            recentLogs,
+            // Anomaly analytics
+            abnormalRegistrations,
+            abnormalTransfers,
+            riskDistribution
         });
     } catch (error) {
+        console.error('Dashboard error:', error);
         res.status(500).json({ error: 'Failed to load dashboard' });
     }
 });
@@ -370,6 +452,173 @@ router.get('/audit', requireAuth(['admin']), async (req, res) => {
         res.json(result);
     } catch (error) {
         res.status(500).json({ error: 'Failed to load audit logs' });
+    }
+});
+
+/**
+ * PUT /api/admin/config/approval-settings - Update multi-step approval configuration
+ */
+router.put('/config/approval-settings', requireAuth(['admin']), async (req, res) => {
+    try {
+        const { enabled, requiredApprovals, approvalType, assignedRegistrars } = req.body;
+        const userId = req.user.sub;
+
+        // Validate
+        if (requiredApprovals !== undefined && (requiredApprovals < 1 || requiredApprovals > 5)) {
+            return res.status(400).json({
+                error: 'Required approvals must be between 1 and 5'
+            });
+        }
+
+        if (approvalType && !['parallel', 'sequential'].includes(approvalType)) {
+            return res.status(400).json({
+                error: 'Approval type must be parallel or sequential'
+            });
+        }
+
+        // Update config
+        let config = await OfficeConfig.findOne({ officeId: 'default-office' });
+
+        if (!config) {
+            config = new OfficeConfig({ officeId: 'default-office' });
+        }
+
+        if (!config.configData) {
+            config.configData = {};
+        }
+
+        config.configData.multiStepApproval = {
+            enabled: enabled !== undefined ? enabled : (config.configData.multiStepApproval?.enabled ?? true),
+            requiredApprovals: requiredApprovals || config.configData.multiStepApproval?.requiredApprovals || 2,
+            approvalType: approvalType || config.configData.multiStepApproval?.approvalType || 'parallel',
+            assignedRegistrars: assignedRegistrars || config.configData.multiStepApproval?.assignedRegistrars || [],
+            autoAssignment: config.configData.multiStepApproval?.autoAssignment || false,
+            allowSelfRejection: config.configData.multiStepApproval?.allowSelfRejection ?? true
+        };
+
+        await config.save();
+
+        // Log change
+        await AuditService.logAction({
+            userId,
+            role: 'admin',
+            action: 'UPDATE_APPROVAL_SETTINGS',
+            details: {
+                enabled,
+                requiredApprovals,
+                approvalType
+            },
+            req
+        });
+
+        res.json({
+            message: 'Approval settings updated successfully',
+            settings: config.configData.multiStepApproval
+        });
+    } catch (error) {
+        console.error('Update settings error:', error);
+        res.status(500).json({ error: 'Failed to update settings' });
+    }
+});
+
+/**
+ * GET /api/admin/config/approval-settings - Get current approval settings
+ */
+router.get('/config/approval-settings', requireAuth(['admin']), async (req, res) => {
+    try {
+        const config = await OfficeConfig.findOne({ officeId: 'default-office' });
+
+        const settings = config?.configData?.multiStepApproval || {
+            enabled: true,
+            requiredApprovals: 2,
+            approvalType: 'parallel',
+            assignedRegistrars: [],
+            autoAssignment: false,
+            allowSelfRejection: true
+        };
+
+        res.json({ settings });
+    } catch (error) {
+        console.error('Get settings error:', error);
+        res.status(500).json({ error: 'Failed to load settings' });
+    }
+});
+
+/**
+ * GET /api/admin/applications/approval-stats - Get statistics about multi-step approvals
+ */
+router.get('/applications/approval-stats', requireAuth(['admin']), async (req, res) => {
+    try {
+        // Application already imported at top of file
+
+        const [
+            totalApplications,
+            underReview,
+            approved,
+            rejected,
+            averageApprovalTime,
+            approvalsByRegistrar
+        ] = await Promise.all([
+            Application.countDocuments(),
+            Application.countDocuments({ status: 'under-review' }),
+            Application.countDocuments({ status: 'approved' }),
+            Application.countDocuments({ status: 'rejected' }),
+
+            // Average time from submission to final approval
+            Application.aggregate([
+                { $match: { status: 'approved', 'approvalMetadata.finalApprovedAt': { $exists: true } } },
+                {
+                    $project: {
+                        approvalTime: {
+                            $subtract: ['$approvalMetadata.finalApprovedAt', '$createdAt']
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        avgTime: { $avg: '$approvalTime' }
+                    }
+                }
+            ]),
+
+            // Count approvals by each registrar
+            Application.aggregate([
+                { $unwind: '$approvals' },
+                { $match: { 'approvals.decision': 'approved' } },
+                {
+                    $group: {
+                        _id: '$approvals.registrarId',
+                        count: { $sum: 1 },
+                        registrarName: { $first: '$approvals.registrarName' }
+                    }
+                },
+                { $sort: { count: -1 } }
+            ])
+        ]);
+
+        const avgApprovalHours = averageApprovalTime[0]?.avgTime
+            ? Math.round(averageApprovalTime[0].avgTime / (1000 * 60 * 60))
+            : 0;
+
+        res.json({
+            totalApplications,
+            byStatus: {
+                underReview,
+                approved,
+                rejected,
+                pending: totalApplications - underReview - approved - rejected
+            },
+            averageApprovalTime: `${avgApprovalHours} hours`,
+            topApprovers: approvalsByRegistrar.slice(0, 5).map(a => ({
+                registrarId: a._id,
+                name: a.registrarName,
+                approvalsCount: a.count
+            }))
+        });
+    } catch (error) {
+        console.error('Get stats error:', error);
+        res.status(500).json({ error: 'Failed to load statistics' });
     }
 });
 

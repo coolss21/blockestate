@@ -15,6 +15,8 @@ export const PORT = Number(process.env.PORT || 8081);
 export const PUBLIC_BASE =
   process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
 
+export const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
+
 export const FRONTEND_ORIGIN =
   process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 

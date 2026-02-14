@@ -47,6 +47,41 @@ const OfficeConfigSchema = new mongoose.Schema(
       blockchainEnabled: {
         type: Boolean,
         default: true
+      },
+      // Multi-step approval settings
+      multiStepApproval: {
+        enabled: {
+          type: Boolean,
+          default: true
+        },
+        requiredApprovals: {
+          type: Number,
+          default: 2,
+          min: 1,
+          max: 5
+        },
+        approvalType: {
+          type: String,
+          enum: ["parallel", "sequential"],
+          default: "parallel"
+        },
+        sequentialOrder: [{
+          role: String, // 'junior-registrar', 'senior-registrar', 'chief-registrar'
+          title: String,
+          required: Boolean
+        }],
+        allowSelfRejection: {
+          type: Boolean,
+          default: true
+        }, // Can a registrar who approved later reject?
+        autoAssignment: {
+          type: Boolean,
+          default: false
+        }, // Auto-assign to specific registrars?
+        assignedRegistrars: [{
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User"
+        }] // Pre-assigned registrars for approvals
       }
     }
   },
