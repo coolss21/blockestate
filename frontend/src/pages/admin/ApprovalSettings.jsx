@@ -1,6 +1,7 @@
 // pages/admin/ApprovalSettings.jsx - Multi-step approval configuration
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import apiClient from '../../config/api';
 
 const ApprovalSettings = () => {
@@ -32,9 +33,9 @@ const ApprovalSettings = () => {
         setSaving(true);
         try {
             await apiClient.put('/admin/config/approval-settings', settings);
-            alert('Settings saved successfully');
+            toast.success('Settings saved successfully');
         } catch (error) {
-            alert(error.response?.data?.error || 'Failed to save settings');
+            toast.error(error.response?.data?.error || 'Failed to save settings');
         } finally {
             setSaving(false);
         }
@@ -124,11 +125,10 @@ const ApprovalSettings = () => {
                                 Approval Type
                             </label>
                             <div className="space-y-4">
-                                <label className={`flex items-start p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                                    settings.approvalType === 'parallel' 
-                                        ? 'bg-blue-50 border-blue-300 shadow-lg shadow-blue-900/10' 
+                                <label className={`flex items-start p-5 rounded-2xl border-2 cursor-pointer transition-all ${settings.approvalType === 'parallel'
+                                        ? 'bg-blue-50 border-blue-300 shadow-lg shadow-blue-900/10'
                                         : 'bg-white border-slate-200 hover:border-blue-200'
-                                }`}>
+                                    }`}>
                                     <input
                                         type="radio"
                                         value="parallel"
@@ -144,11 +144,10 @@ const ApprovalSettings = () => {
                                         </p>
                                     </div>
                                 </label>
-                                <label className={`flex items-start p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                                    settings.approvalType === 'sequential' 
-                                        ? 'bg-blue-50 border-blue-300 shadow-lg shadow-blue-900/10' 
+                                <label className={`flex items-start p-5 rounded-2xl border-2 cursor-pointer transition-all ${settings.approvalType === 'sequential'
+                                        ? 'bg-blue-50 border-blue-300 shadow-lg shadow-blue-900/10'
                                         : 'bg-white border-slate-200 hover:border-blue-200'
-                                }`}>
+                                    }`}>
                                     <input
                                         type="radio"
                                         value="sequential"

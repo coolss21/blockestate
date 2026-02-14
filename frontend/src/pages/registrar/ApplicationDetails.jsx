@@ -1,7 +1,10 @@
 // pages/registrar/ApplicationDetails.jsx - Complete application review page
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import apiClient from '../../config/api';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import PageTransition from '../../components/PageTransition';
 
 const ApplicationDetails = () => {
     const { id } = useParams(); // This is the appId (APP-xxx) not MongoDB _id
@@ -12,6 +15,7 @@ const ApplicationDetails = () => {
     const [processing, setProcessing] = useState(false);
     const [rejectionReason, setRejectionReason] = useState('');
     const [showRejectModal, setShowRejectModal] = useState(false);
+    const [showApproveConfirm, setShowApproveConfirm] = useState(false);
     const [comment, setComment] = useState('');
     const [error, setError] = useState('');
 
@@ -43,8 +47,7 @@ const ApplicationDetails = () => {
     };
 
     const handleApprove = async () => {
-        if (!window.confirm('Are you sure you want to approve this application?')) return;
-
+        setShowApproveConfirm(false);
         setProcessing(true);
         try {
             const response = await apiClient.post(`/registrar/application/${application.appId || application._id}/approve`, {
@@ -52,14 +55,14 @@ const ApplicationDetails = () => {
             });
 
             if (response.data.status === 'approved') {
-                alert(`✅ Application fully approved!\n\nProperty ID: ${response.data.property?.propertyId}\nTransaction: ${response.data.property?.txHash}`);
+                toast.success(`Application fully approved! Property ID: ${response.data.property?.propertyId}`);
             } else {
-                alert(`✅ Your approval has been recorded.\n\n${response.data.approvalProgress?.remaining || 0} more approval(s) needed.`);
+                toast.success(`Approval recorded. ${response.data.approvalProgress?.remaining || 0} more approval(s) needed.`);
             }
 
             navigate('/registrar/inbox');
         } catch (error) {
-            alert('Approval failed: ' + (error.response?.data?.error || error.message));
+            toast.error('Approval failed: ' + (error.response?.data?.error || error.message));
         } finally {
             setProcessing(false);
         }
@@ -67,7 +70,7 @@ const ApplicationDetails = () => {
 
     const handleReject = async () => {
         if (!rejectionReason.trim()) {
-            alert('Please provide a reason for rejection');
+            toast.error('Please provide a reason for rejection');
             return;
         }
 
@@ -76,10 +79,10 @@ const ApplicationDetails = () => {
             await apiClient.post(`/registrar/application/${application.appId || application._id}/reject`, {
                 reason: rejectionReason
             });
-            alert('Application Rejected');
+            toast.success('Application has been rejected');
             navigate('/registrar/inbox');
         } catch (error) {
-            alert('Rejection failed: ' + (error.response?.data?.error || error.message));
+            toast.error('Rejection failed: ' + (error.response?.data?.error || error.message));
         } finally {
             setProcessing(false);
             setShowRejectModal(false);
@@ -127,7 +130,7 @@ const ApplicationDetails = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-20">
+        <PageTransition className="min-h-screen bg-slate-50/50 pb-20">
             {/* High-Authority Sticky Header */}
             <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 mb-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
@@ -270,9 +273,8 @@ const ApplicationDetails = () => {
                                 <div className="space-y-4">
                                     {approvalHistory.map((approval, index) => (
                                         <div key={index} className="flex items-start gap-4 pb-4 border-b border-slate-100 last:border-b-0">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                                approval.decision === 'approved' ? 'bg-emerald-500' : 'bg-rose-500'
-                                            }`}>
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${approval.decision === 'approved' ? 'bg-emerald-500' : 'bg-rose-500'
+                                                }`}>
                                                 <span className="text-white text-sm font-black">
                                                     {approval.decision === 'approved' ? '✓' : '✗'}
                                                 </span>
@@ -364,7 +366,7 @@ const ApplicationDetails = () => {
                                         onChange={(e) => setComment(e.target.value)}
                                     />
                                     <button
-                                        onClick={handleApprove}
+                                        onClick={() => setShowApproveConfirm(true)}
                                         disabled={processing}
                                         className="w-full btn-primary h-16 text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-blue-900/20 bg-blue-600 border-blue-600 hover:bg-blue-700 hover:border-blue-700"
                                     >
@@ -432,7 +434,17 @@ const ApplicationDetails = () => {
                     </div>
                 </div>
             )}
-        </div>
+
+            <ConfirmDialog
+                open={showApproveConfirm}
+                title="Approve Application"
+                message="Are you sure you want to approve this application? This action will be recorded on the blockchain."
+                confirmText="Approve"
+                variant="info"
+                onConfirm={handleApprove}
+                onCancel={() => setShowApproveConfirm(false)}
+            />
+        </PageTransition>
     );
 };
 

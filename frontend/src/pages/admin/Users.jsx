@@ -1,7 +1,9 @@
 // pages/admin/Users.jsx - Complete user management page
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import apiClient from '../../config/api';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const Users = () => {
     const navigate = useNavigate();
@@ -13,6 +15,7 @@ const Users = () => {
     const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'citizen' });
     const [creating, setCreating] = useState(false);
     const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+    const [confirmAction, setConfirmAction] = useState(null); // { type, userId, role }
 
     useEffect(() => {
         fetchUsers();
@@ -38,33 +41,42 @@ const Users = () => {
     };
 
     const handleVerify = async (userId) => {
-        if (!window.confirm('Verify this user?')) return;
         try {
             await apiClient.patch(`/admin/users/${userId}/verify`);
+            toast.success('User verified successfully');
             fetchUsers();
         } catch (error) {
-            console.error('Verification failed:', error);
+            toast.error('Verification failed');
         }
     };
 
     const handleUpdateRole = async (userId, newRole) => {
-        if (!window.confirm(`Change this user's role to ${newRole}?`)) return;
         try {
             await apiClient.patch(`/admin/users/${userId}/role`, { role: newRole });
+            toast.success(`Role changed to ${newRole}`);
             fetchUsers();
         } catch (error) {
-            console.error('Role update failed:', error);
+            toast.error('Role update failed');
         }
     };
 
     const handleDelete = async (userId) => {
-        if (!window.confirm('Are you sure you want to deactivate this user?')) return;
         try {
             await apiClient.delete(`/admin/users/${userId}`);
+            toast.success('User deactivated');
             fetchUsers();
         } catch (error) {
-            console.error('Deletion failed:', error);
+            toast.error('Deletion failed');
         }
+    };
+
+    const handleConfirmAction = () => {
+        if (!confirmAction) return;
+        const { type, userId, role } = confirmAction;
+        setConfirmAction(null);
+        if (type === 'verify') handleVerify(userId);
+        else if (type === 'role') handleUpdateRole(userId, role);
+        else if (type === 'delete') handleDelete(userId);
     };
 
     const handleCreateUser = async (e) => {
@@ -182,7 +194,7 @@ const Users = () => {
                                                 <div className="relative group/sel">
                                                     <select
                                                         value={u.role}
-                                                        onChange={(e) => handleUpdateRole(u._id, e.target.value)}
+                                                        onChange={(e) => setConfirmAction({ type: 'role', userId: u._id, role: e.target.value })}
                                                         className={`pl-4 pr-10 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 cursor-pointer focus:ring-8 focus:ring-slate-500/5 shadow-sm transition-all appearance-none ${u.role === 'admin' ? 'bg-slate-900 border-slate-900 text-white' :
                                                             u.role === 'registrar' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' :
                                                                 u.role === 'court' ? 'bg-rose-50 border-rose-100 text-rose-800' : 'bg-indigo-50 border-indigo-100 text-indigo-800'
@@ -208,14 +220,14 @@ const Users = () => {
                                                 <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     {!u.verified && (
                                                         <button
-                                                            onClick={() => handleVerify(u._id)}
+                                                            onClick={() => setConfirmAction({ type: 'verify', userId: u._id })}
                                                             className="h-10 px-5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl hover:bg-emerald-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest"
                                                         >
                                                             Auth_Verify
                                                         </button>
                                                     )}
                                                     <button
-                                                        onClick={() => handleDelete(u._id)}
+                                                        onClick={() => setConfirmAction({ type: 'delete', userId: u._id })}
                                                         className="h-10 px-5 bg-rose-50 text-rose-700 border border-rose-100 rounded-xl hover:bg-rose-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest"
                                                     >
                                                         Suspend
@@ -340,6 +352,28 @@ const Users = () => {
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={!!confirmAction}
+                title={
+                    confirmAction?.type === 'verify' ? 'Verify User' :
+                        confirmAction?.type === 'role' ? 'Change Role' :
+                            confirmAction?.type === 'delete' ? 'Deactivate User' : 'Confirm'
+                }
+                message={
+                    confirmAction?.type === 'verify' ? 'Are you sure you want to verify this user?' :
+                        confirmAction?.type === 'role' ? `Change this user's role to ${confirmAction?.role}?` :
+                            confirmAction?.type === 'delete' ? 'Are you sure you want to deactivate this user? This action cannot be easily undone.' : ''
+                }
+                confirmText={
+                    confirmAction?.type === 'verify' ? 'Verify' :
+                        confirmAction?.type === 'role' ? 'Change Role' :
+                            confirmAction?.type === 'delete' ? 'Deactivate' : 'Confirm'
+                }
+                variant={confirmAction?.type === 'delete' ? 'danger' : confirmAction?.type === 'verify' ? 'info' : 'warning'}
+                onConfirm={handleConfirmAction}
+                onCancel={() => setConfirmAction(null)}
+            />
         </div>
     );
 };
