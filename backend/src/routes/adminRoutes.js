@@ -130,9 +130,6 @@ router.get('/dashboard', requireAuth(['admin']), async (req, res) => {
         }));
 
         // ── Build anomaly response data ──
-        console.log('[DASH DEBUG] rejectedAppsByMonth:', JSON.stringify(rejectedAppsByMonth));
-        console.log('[DASH DEBUG] disputedByDistrict:', JSON.stringify(disputedByDistrict));
-        console.log('[DASH DEBUG] applicationStatusCounts:', JSON.stringify(applicationStatusCounts));
 
         // 1. Abnormal registrations over time (rejected apps per month)
         const abnormalRegistrations = rejectedAppsByMonth.map(s => ({
