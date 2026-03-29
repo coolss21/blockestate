@@ -1,7 +1,9 @@
 // pages/registrar/Certificate.jsx - Professional certificate generation/viewer
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import apiClient from '../../config/api';
+import PageTransition from '../../components/PageTransition';
 
 const Certificate = () => {
     const navigate = useNavigate();
@@ -55,7 +57,7 @@ const Certificate = () => {
             link.remove();
         } catch (error) {
             console.error('PDF Download failed:', error);
-            alert('Failed to generate official PDF. Please try again.');
+            toast.error('Failed to generate official PDF. Please try again.');
         }
     };
 
@@ -65,7 +67,7 @@ const Certificate = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-20">
+        <PageTransition className="min-h-screen bg-slate-50/50 pb-20">
             {/* High-Authority Sticky Header */}
             <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 mb-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
@@ -238,7 +240,7 @@ const Certificate = () => {
                     </div>
                 )}
             </div>
-        </div>
+        </PageTransition>
     );
 };
 

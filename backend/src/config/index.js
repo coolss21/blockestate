@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { ethers } from "ethers";
+import os from "os";
 
 dotenv.config();
 
@@ -10,10 +11,24 @@ export function mustEnv(key) {
   return v;
 }
 
+function getLocalIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+    }
+  }
+  return 'localhost';
+}
+
 /* ---------------- BASIC CONFIG ---------------- */
 export const PORT = Number(process.env.PORT || 8081);
+export const LOCAL_IP = getLocalIp();
+
 export const PUBLIC_BASE =
-  process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
+  process.env.PUBLIC_BASE_URL || `http://${LOCAL_IP}:${PORT}`;
+
+export const BACKEND_URL = process.env.BACKEND_URL || `http://${LOCAL_IP}:${PORT}`;
 
 export const FRONTEND_ORIGIN =
   process.env.FRONTEND_ORIGIN || "http://localhost:5173";

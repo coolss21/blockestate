@@ -134,6 +134,11 @@ router.post('/apply', requireAuth(['citizen']), upload.array('documents', 5), as
         // Generate application ID
         const appId = `APP-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
 
+        // Get system config for default approval settings
+        const OfficeConfig = (await import('../models/Office.js')).default;
+        const config = await OfficeConfig.findOne({ officeId: 'default-office' });
+        const multiStepEnabled = config?.configData?.multiStepApproval?.enabled ?? true;
+
         // Create application
         const application = new Application({
             appId,
@@ -147,7 +152,16 @@ router.post('/apply', requireAuth(['citizen']), upload.array('documents', 5), as
                 value: Number(value)
             },
             details: { reason, notes },
-            documents
+            documents,
+            // Initialize approvals array and metadata if multi-step enabled
+            approvals: [],
+            approvalMetadata: multiStepEnabled ? {
+                requiredApprovals: config?.configData?.multiStepApproval?.requiredApprovals || 2,
+                approvalType: config?.configData?.multiStepApproval?.approvalType || 'parallel',
+                currentStep: 0,
+                approvedCount: 0,
+                rejectedCount: 0
+            } : undefined
         });
 
         await application.save();
@@ -177,7 +191,7 @@ router.post('/apply', requireAuth(['citizen']), upload.array('documents', 5), as
 });
 
 /**
- * GET /api/citizen/applications - Get user's applications
+ * GET /api/citizen/applications - Get user's applications with approval progress
  */
 router.get('/applications', requireAuth(['citizen']), async (req, res) => {
     try {
@@ -186,12 +200,103 @@ router.get('/applications', requireAuth(['citizen']), async (req, res) => {
         const applications = await Application.find({ applicantId: userId })
             .sort({ createdAt: -1 })
             .populate('review.reviewedBy', 'name email')
+            .populate('approvals.registrarId', 'name email')
             .lean();
 
-        res.json({ applications });
+        // Add approval progress to each application and ensure status is correct
+        const applicationsWithProgress = applications.map(app => {
+            // Calculate actual approval count from approvals array
+            const actualApprovedCount = app.approvals?.filter(a => a.decision === 'approved').length || 0;
+            const requiredApprovals = app.approvalMetadata?.requiredApprovals || 2;
+            
+            // Ensure status is correct based on approval count
+            let correctStatus = app.status;
+            if (app.status === 'pending' && actualApprovedCount > 0) {
+                correctStatus = 'under-review';
+            } else if (app.status === 'under-review' && actualApprovedCount >= requiredApprovals && !app.propertyId) {
+                // Should be approved but might not be finalized yet
+                correctStatus = 'under-review'; // Keep as under-review until blockchain registration
+            } else if (app.status === 'approved' && actualApprovedCount < requiredApprovals && !app.propertyId) {
+                // Status incorrectly set to approved - fix it
+                correctStatus = 'under-review';
+            }
+            
+            return {
+                ...app,
+                status: correctStatus, // Use corrected status
+                approvalProgress: app.approvalMetadata ? {
+                    approved: actualApprovedCount,
+                    required: requiredApprovals,
+                    remaining: requiredApprovals - actualApprovedCount,
+                    percentage: Math.round((actualApprovedCount / requiredApprovals) * 100)
+                } : null
+            };
+        });
+
+        res.json({ applications: applicationsWithProgress });
     } catch (error) {
         console.error('Get applications error:', error);
         res.status(500).json({ error: 'Failed to load applications' });
+    }
+});
+
+/**
+ * GET /api/citizen/application/:appId/status - Get detailed approval status (citizen view)
+ */
+router.get('/application/:appId/status', requireAuth(['citizen']), async (req, res) => {
+    try {
+        const { appId } = req.params;
+        const userId = req.user.sub;
+
+        const query = req.params.appId.startsWith('APP-')
+            ? { appId, applicantId: userId }
+            : { $or: [{ appId }, { _id: appId }], applicantId: userId };
+
+        const application = await Application.findOne(query)
+            .populate('approvals.registrarId', 'name')
+            .lean();
+
+        if (!application) {
+            return res.status(404).json({ error: 'Application not found' });
+        }
+
+        function getStatusMessage(app) {
+            if (app.status === 'rejected') {
+                return `Application rejected: ${app.rejectionReason || 'No reason provided'}`;
+            }
+            if (app.status === 'approved') {
+                return `Application approved and property registered`;
+            }
+            if (app.status === 'under-review') {
+                const approved = app.approvalMetadata?.approvedCount || 0;
+                const required = app.approvalMetadata?.requiredApprovals || 2;
+                return `Under review: ${approved} of ${required} approvals received`;
+            }
+            return 'Application pending initial review';
+        }
+
+        // Don't expose full registrar details to citizen
+        const approvalStatus = {
+            appId: application.appId,
+            status: application.status,
+            submittedAt: application.createdAt,
+            approvalProgress: application.approvalMetadata ? {
+                approved: application.approvalMetadata.approvedCount || 0,
+                required: application.approvalMetadata.requiredApprovals || 2,
+                percentage: Math.round(((application.approvalMetadata.approvedCount || 0) / (application.approvalMetadata.requiredApprovals || 2)) * 100)
+            } : null,
+            approvals: application.approvals?.map(approval => ({
+                decision: approval.decision,
+                timestamp: approval.approvedAt,
+                comment: approval.comment, // Only show comment, not registrar identity
+            })) || [],
+            statusMessage: getStatusMessage(application)
+        };
+
+        res.json(approvalStatus);
+    } catch (error) {
+        console.error('Get status error:', error);
+        res.status(500).json({ error: 'Failed to load status' });
     }
 });
 

@@ -1,6 +1,7 @@
 // pages/public/PublicCertificate.jsx - Professional property authenticity certificate
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import apiClient from '../../config/api';
 
 const PublicCertificate = () => {
@@ -71,7 +72,7 @@ const PublicCertificate = () => {
             link.remove();
         } catch (error) {
             console.error('PDF Download failed:', error);
-            alert('Failed to generate official PDF. Please try again.');
+            toast.error('Failed to generate official PDF. Please try again.');
         }
     };
 

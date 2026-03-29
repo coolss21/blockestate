@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import QRCode from 'qrcode';
-import { PUBLIC_BASE } from '../config/index.js';
+import { BACKEND_URL } from '../config/index.js';
 import { sha256Hex } from '../utils/hash.js';
 import { BlockchainService } from '../services/blockchainService.js';
 import { IpfsService } from '../services/ipfsService.js';
@@ -11,6 +11,7 @@ import Certificate from '../models/Certificate.js';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
@@ -25,18 +26,12 @@ function getLocalIp() {
 }
 
 function getQrUrl(propertyId) {
-  let host = PUBLIC_BASE;
-  if (host.includes('localhost') || host.includes('127.0.0.1')) {
-    host = `http://${getLocalIp()}:5173`;
-  } else {
-    host = process.env.FRONTEND_ORIGIN || host;
-  }
-  return `${host.replace(/\/$/, '')}/certificate/${encodeURIComponent(propertyId)}`;
+  return `${BACKEND_URL.replace(/\/$/, '')}/certificates/${encodeURIComponent(propertyId)}.pdf`;
 }
 
 export const PropertyController = {
   async health(_req, res) {
-    return res.json({ ok: true, base: PUBLIC_BASE });
+    return res.json({ ok: true, base: BACKEND_URL });
   },
 
   async get(req, res) {
@@ -197,6 +192,18 @@ export const PropertyController = {
         },
         { upsert: true, new: true }
       );
+
+      // 3b. Save to filesystem for static serving
+      try {
+        const __certFilename = fileURLToPath(import.meta.url);
+        const __certDirname = path.dirname(__certFilename);
+        const CERT_DIR = path.join(__certDirname, '../storage/certificates');
+        if (!fs.existsSync(CERT_DIR)) fs.mkdirSync(CERT_DIR, { recursive: true });
+        fs.writeFileSync(path.join(CERT_DIR, `${id}.pdf`), pdfBuffer);
+        console.log(`[CERT] Saved certificate PDF to storage/certificates/${id}.pdf`);
+      } catch (fsErr) {
+        console.error('[CERT] Failed to save certificate PDF to filesystem:', fsErr);
+      }
 
       // 4. Update property record metadata
       await Property.updateOne({ propertyId: id }, {

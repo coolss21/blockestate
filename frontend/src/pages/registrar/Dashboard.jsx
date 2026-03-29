@@ -30,7 +30,9 @@ const RegistrarDashboard = () => {
 
     const fetchApplications = async () => {
         try {
-            const response = await apiClient.get('/registrar/inbox?status=pending&limit=5');
+            // Remove status filter to get all pending/under-review applications
+            // The backend will filter out applications already approved by this registrar
+            const response = await apiClient.get('/registrar/inbox?limit=5');
             setApplications(response.data.applications || []);
         } catch (error) {
             console.error('Failed to load applications:', error);

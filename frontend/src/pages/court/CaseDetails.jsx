@@ -1,8 +1,11 @@
 // pages/court/CaseDetails.jsx - Complete case management page
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import apiClient from '../../config/api';
 import HistoryModal from '../../components/HistoryModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import PageTransition from '../../components/PageTransition';
 
 const CaseDetails = () => {
     const { id } = useParams();
@@ -16,6 +19,8 @@ const CaseDetails = () => {
     const [error, setError] = useState('');
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [hearingDate, setHearingDate] = useState('');
+    const [showCloseCaseConfirm, setShowCloseCaseConfirm] = useState(false);
+    const [closeCaseResolution, setCloseCaseResolution] = useState('');
 
     useEffect(() => {
         fetchDetails();
@@ -75,19 +80,23 @@ const CaseDetails = () => {
     };
 
     const handleCloseCase = async () => {
-        const resolution = window.prompt('Enter resolution summary:');
-        if (!resolution) return;
+        if (!closeCaseResolution.trim()) {
+            toast.error('Please enter a resolution summary');
+            return;
+        }
 
-        if (!window.confirm('Are you sure you want to close this case? This will unfreeze the property and clear the dispute.')) return;
-
+        setShowCloseCaseConfirm(false);
         setProcessing(true);
         try {
             await apiClient.post(`/court/cases/${caseData.caseId}/close`, {
-                resolution
+                resolution: closeCaseResolution
             });
+            toast.success('Case closed successfully. Property unfrozen.');
+            setCloseCaseResolution('');
             await fetchDetails();
         } catch (error) {
             console.error('Failed to close case:', error);
+            toast.error('Failed to close case');
         } finally {
             setProcessing(false);
         }
@@ -121,7 +130,7 @@ const CaseDetails = () => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-20">
+        <PageTransition className="min-h-screen bg-slate-50/50 pb-20">
             {/* Professional Header */}
             <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 mb-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex justify-between items-center">
@@ -377,8 +386,24 @@ const CaseDetails = () => {
                                             <h3 className="text-[10px] font-black text-rose-500 uppercase tracking-[0.4em]">Absolute Adjudication</h3>
                                             <p className="text-xl font-black italic pr-10">Clear Dossier & Unfreeze Asset</p>
                                         </div>
+                                        <div className="space-y-3 mb-6">
+                                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Resolution Summary</label>
+                                            <textarea
+                                                value={closeCaseResolution}
+                                                onChange={(e) => setCloseCaseResolution(e.target.value)}
+                                                className="w-full bg-white/10 border border-white/10 rounded-[1.2rem] p-4 text-sm font-bold text-white placeholder-slate-500 focus:ring-4 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
+                                                placeholder="Enter resolution summary..."
+                                                rows="3"
+                                            />
+                                        </div>
                                         <button
-                                            onClick={handleCloseCase}
+                                            onClick={() => {
+                                                if (!closeCaseResolution.trim()) {
+                                                    toast.error('Please enter a resolution summary');
+                                                    return;
+                                                }
+                                                setShowCloseCaseConfirm(true);
+                                            }}
                                             disabled={processing}
                                             className="w-full h-16 bg-white text-slate-950 rounded-[1.2rem] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-rose-500 hover:text-white transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
                                         >
@@ -422,7 +447,17 @@ const CaseDetails = () => {
                     onClose={() => setIsHistoryOpen(false)}
                 />
             )}
-        </div>
+
+            <ConfirmDialog
+                open={showCloseCaseConfirm}
+                title="Close Case"
+                message="Are you sure you want to close this case? This will unfreeze the property and clear the dispute. This action cannot be undone."
+                confirmText="Close Case"
+                variant="danger"
+                onConfirm={handleCloseCase}
+                onCancel={() => setShowCloseCaseConfirm(false)}
+            />
+        </PageTransition>
     );
 };
 

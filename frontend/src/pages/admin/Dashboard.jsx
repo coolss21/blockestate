@@ -20,12 +20,16 @@ const AdminDashboard = () => {
         analytics: [],
         statusAnalytics: [],
         districtAnalytics: [],
-        recentLogs: []
+        recentLogs: [],
+        abnormalRegistrations: [],
+        abnormalTransfers: [],
+        riskDistribution: []
     });
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('summary');
 
     const COLORS = ['#0891b2', '#4f46e5', '#059669', '#e11d48', '#d97706'];
+    const RISK_COLORS = { 'Low Risk': '#0891b2', 'Medium Risk': '#d97706', 'High Risk': '#e11d48', 'Critical': '#7c3aed' };
 
     useEffect(() => {
         fetchDashboard();
@@ -313,6 +317,114 @@ const AdminDashboard = () => {
                                                     ))}
                                                 </Bar>
                                             </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Anomaly Section Header */}
+                                <div className="lg:col-span-2 mt-4">
+                                    <div className="flex items-center gap-4 mb-2 px-2">
+                                        <div className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center text-lg shadow-lg shadow-rose-500/30">⚠️</div>
+                                        <div>
+                                            <h2 className="text-[11px] font-black text-rose-500 uppercase tracking-[0.5em] font-mono italic">Anomaly_Detection_Matrix</h2>
+                                            <p className="text-2xl font-black italic uppercase tracking-tighter text-slate-900">Abnormal Registration & Transfer Trends</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Abnormal Registrations — Line Chart */}
+                                <div className="card p-12 bg-white border-0 shadow-2xl shadow-slate-900/5 rounded-[3.5rem] group">
+                                    <div className="flex justify-between items-center mb-12 px-2">
+                                        <div>
+                                            <h2 className="text-[11px] font-black text-rose-500 uppercase tracking-[0.5em] mb-2 font-mono italic">Threat_Signal_Trend</h2>
+                                            <p className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Abnormal Registrations</p>
+                                        </div>
+                                        <div className="hidden sm:flex items-center gap-4 bg-rose-50 px-6 py-4 rounded-[1.5rem] border border-rose-100/50">
+                                            <span className="text-2xl">🚨</span>
+                                            <div>
+                                                <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest">Spike Alert</p>
+                                                <p className="text-xs font-black text-rose-600">+46.7%</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="h-[350px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={stats.abnormalRegistrations}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 800, fill: '#94a3b8' }} dy={10} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 800, fill: '#94a3b8' }} allowDecimals={false} />
+                                                <Tooltip
+                                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '24px', padding: '20px', boxShadow: '0 30px 60px -12px rgb(15 23 42 / 0.5)' }}
+                                                    itemStyle={{ color: '#f43f5e', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1.5px' }}
+                                                    labelStyle={{ color: '#64748b', fontSize: '9px', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase' }}
+                                                />
+                                                <Line type="monotone" dataKey="anomalies" name="Flagged" stroke="#e11d48" strokeWidth={4} dot={{ r: 6, fill: '#e11d48', strokeWidth: 3, stroke: '#fff' }} activeDot={{ r: 10 }} animationDuration={2000} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Abnormal Transfers per Region — Bar Chart */}
+                                <div className="card p-12 bg-white border-0 shadow-2xl shadow-slate-900/5 rounded-[3.5rem]">
+                                    <div className="flex justify-between items-center mb-12 px-2">
+                                        <div>
+                                            <h2 className="text-[11px] font-black text-amber-500 uppercase tracking-[0.5em] mb-2 font-mono italic">Regional_Threat_Map</h2>
+                                            <p className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Abnormal Transfers</p>
+                                        </div>
+                                    </div>
+                                    <div className="h-[350px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={stats.abnormalTransfers}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                <XAxis dataKey="region" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 800, fill: '#94a3b8' }} dy={10} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 800, fill: '#94a3b8' }} allowDecimals={false} />
+                                                <Tooltip
+                                                    cursor={{ fill: 'rgba(15,23,42,0.04)' }}
+                                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '16px', padding: '12px' }}
+                                                    itemStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}
+                                                />
+                                                <Bar dataKey="flagged" name="Flagged Transfers" fill="#d97706" radius={[16, 16, 0, 0]} barSize={50} animationDuration={2000}>
+                                                    {(stats.abnormalTransfers || []).map((_, index) => (
+                                                        <Cell key={`at-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Risk Distribution — Pie Chart (full width) */}
+                                <div className="lg:col-span-2 card p-12 bg-white border-0 shadow-2xl shadow-slate-900/5 rounded-[3.5rem]">
+                                    <div className="flex justify-between items-center mb-12 px-2">
+                                        <div>
+                                            <h2 className="text-[11px] font-black text-violet-500 uppercase tracking-[0.5em] mb-2 font-mono italic">Risk_Classification_Overlay</h2>
+                                            <p className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Risk Distribution</p>
+                                        </div>
+                                    </div>
+                                    <div className="h-[350px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={stats.riskDistribution}
+                                                    cx="50%" cy="50%"
+                                                    innerRadius={80} outerRadius={130}
+                                                    paddingAngle={4}
+                                                    dataKey="value"
+                                                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                                    animationDuration={2000}
+                                                >
+                                                    {(stats.riskDistribution || []).map((entry, index) => (
+                                                        <Cell key={`risk-${index}`} fill={RISK_COLORS[entry.name] || COLORS[index]} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip
+                                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '16px', padding: '12px' }}
+                                                    itemStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}
+                                                />
+                                                <Legend
+                                                    wrapperStyle={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '2px' }}
+                                                />
+                                            </PieChart>
                                         </ResponsiveContainer>
                                     </div>
                                 </div>

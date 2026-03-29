@@ -10,41 +10,41 @@ To create users, you can use the registration endpoint or add them directly via 
 
 ```bash
 # Register Citizen
-curl -X POST http://localhost:5000/api/auth/register \
+curl -X POST http://localhost:8081/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "citizen@example.com",
-    "password": "your-password",
+    "password": "password123",
     "name": "John Citizen",
     "role": "citizen"
   }'
 
 # Register Registrar
-curl -X POST http://localhost:5000/api/auth/register \
+curl -X POST http://localhost:8081/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "registrar@example.com",
-    "password": "your-password",
+    "password": "password123",
     "name": "Alice Registrar",
     "role": "registrar"
   }'
 
 # Register Court Officer
-curl -X POST http://localhost:5000/api/auth/register \
+curl -X POST http://localhost:8081/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "court@example.com",
-    "password": "your-password",
+    "password": "password123",
     "name": "Judge Robert",
     "role": "court"
   }'
 
 # Register Admin
-curl -X POST http://localhost:5000/api/auth/register \
+curl -X POST http://localhost:8081/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@example.com",
-    "password": "your-password",
+    "password": "password123",
     "name": "Admin User",
     "role": "admin"
   }'

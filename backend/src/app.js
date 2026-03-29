@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import routes from './routes/index.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { FRONTEND_ORIGIN } from './config/index.js';
 import { connectMongo } from "./db/mongoose.js";
 import cookieParser from 'cookie-parser';
@@ -35,6 +37,11 @@ export function createApp() {
   app.use(express.json({ limit: '2mb' }));
 
   app.use('/api', routes);
+
+  // STATIC: Serve certificates
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  app.use('/certificates', express.static(path.join(__dirname, 'storage', 'certificates')));
 
   app.get('/', (_req, res) => res.json({ ok: true, message: 'PropertyChain backend', api: '/api/health' }));
 

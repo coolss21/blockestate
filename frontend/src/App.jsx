@@ -25,6 +25,7 @@ import AdminDashboard from './pages/admin/Dashboard';
 import Users from './pages/admin/Users';
 import SystemConfig from './pages/admin/SystemConfig';
 import AuditLogs from './pages/admin/AuditLogs';
+import ApprovalSettings from './pages/admin/ApprovalSettings';
 import VerifyQR from './pages/VerifyQR';
 import PublicCertificate from './pages/public/PublicCertificate';
 
@@ -202,6 +203,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AuditLogs />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/approval-settings"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <ApprovalSettings />
               </ProtectedRoute>
             }
           />

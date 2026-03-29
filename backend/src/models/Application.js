@@ -25,6 +25,63 @@ const reviewSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const approvalSchema = new mongoose.Schema(
+  {
+    registrarId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    decision: {
+      type: String,
+      enum: ["approved", "rejected", "requested-changes"],
+      required: true,
+    },
+    comment: String,
+    approvedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    approvalOrder: Number, // For sequential workflow
+    registrarName: String, // Snapshot at approval time
+    registrarEmail: String, // Snapshot at approval time
+  },
+  { _id: false }
+);
+
+const approvalMetadataSchema = new mongoose.Schema(
+  {
+    requiredApprovals: {
+      type: Number,
+      default: 2,
+    },
+    approvalType: {
+      type: String,
+      enum: ["parallel", "sequential"],
+      default: "parallel",
+    },
+    currentStep: {
+      type: Number,
+      default: 0,
+    }, // For sequential workflow
+    approvedCount: {
+      type: Number,
+      default: 0,
+    },
+    rejectedCount: {
+      type: Number,
+      default: 0,
+    },
+    finalApprovedAt: Date,
+    finalApprovedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    blockchainError: String, // Track blockchain registration failures
+  },
+  { _id: false }
+);
+
 const applicationSchema = new mongoose.Schema(
   {
     appId: {
@@ -48,7 +105,7 @@ const applicationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "under-review", "approved", "rejected"],
       default: "pending",
       index: true,
     },
@@ -86,6 +143,10 @@ const applicationSchema = new mongoose.Schema(
     documents: [documentSchema],
 
     review: reviewSchema,
+
+    // Multi-step approval fields
+    approvals: [approvalSchema],
+    approvalMetadata: approvalMetadataSchema,
   },
   { timestamps: true }
 );
@@ -96,5 +157,8 @@ applicationSchema.index({
   "details.reason": "text",
   "details.notes": "text",
 });
+applicationSchema.index({ "approvalMetadata.currentStep": 1 });
+applicationSchema.index({ "approvals.registrarId": 1 });
+applicationSchema.index({ status: 1, "approvalMetadata.approvedCount": 1 });
 
 export default mongoose.model("Application", applicationSchema);

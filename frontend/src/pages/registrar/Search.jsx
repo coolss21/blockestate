@@ -1,6 +1,7 @@
 // pages/registrar/Search.jsx - Complete property search
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import apiClient from '../../config/api';
 import QRModal from '../../components/QRModal';
 import HistoryModal from '../../components/HistoryModal';
@@ -52,7 +53,7 @@ const Search = () => {
             link.remove();
         } catch (error) {
             console.error('PDF Download failed:', error);
-            alert('Failed to generate PDF. Please try again.');
+            toast.error('Failed to generate PDF. Please try again.');
         }
     };
 

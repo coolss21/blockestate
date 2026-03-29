@@ -36,22 +36,25 @@ const Applications = () => {
         return parts.join(', ') || 'N/A';
     };
 
-    const getStatusIcon = (status) => {
-        const icons = {
-            pending: '⏳',
-            approved: '✅',
-            rejected: '❌'
-        };
-        return icons[status] || '❓';
-    };
 
     const getStatusBadgeClass = (status) => {
         const classes = {
             pending: 'badge-warning',
+            'under-review': 'badge-info',
             approved: 'badge-success',
             rejected: 'badge-danger'
         };
         return classes[status] || 'badge-neutral';
+    };
+
+    const getStatusIcon = (status) => {
+        const icons = {
+            pending: '⏳',
+            'under-review': '🔍',
+            approved: '✅',
+            rejected: '❌'
+        };
+        return icons[status] || '❓';
     };
 
     return (
@@ -120,13 +123,14 @@ const Applications = () => {
                                         <div className="md:w-56 p-8 bg-slate-50 flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-slate-100">
                                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg mb-4 text-xl ${app.status === 'approved' ? 'bg-emerald-600 text-white shadow-emerald-200' :
                                                 app.status === 'rejected' ? 'bg-rose-600 text-white shadow-rose-200' :
+                                                app.status === 'under-review' ? 'bg-blue-600 text-white shadow-blue-200' :
                                                     'bg-amber-500 text-white shadow-amber-200'
                                                 }`}>
                                                 {getStatusIcon(app.status)}
                                             </div>
                                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">State</p>
                                             <span className={`${getStatusBadgeClass(app.status)} scale-110`}>
-                                                {app.status}
+                                                {app.status.replace('-', ' ')}
                                             </span>
                                         </div>
 
@@ -184,13 +188,65 @@ const Applications = () => {
                                                 </div>
                                             </div>
 
+                                            {/* Approval Progress Bar */}
+                                            {app.approvalProgress && app.status !== 'rejected' && app.status !== 'approved' && (
+                                                <div className="mt-8 p-5 bg-blue-50 rounded-2xl border border-blue-100">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">Approval Progress</p>
+                                                        <span className="text-xs font-black text-blue-700">
+                                                            {app.approvalProgress.approved} / {app.approvalProgress.required}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-blue-100 rounded-full h-2.5 mb-2">
+                                                        <div
+                                                            className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
+                                                            style={{ width: `${app.approvalProgress.percentage}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    {app.approvalProgress.remaining > 0 && (
+                                                        <p className="text-xs font-bold text-blue-600 italic">
+                                                            {app.approvalProgress.remaining} more approval{app.approvalProgress.remaining > 1 ? 's' : ''} needed
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Approval Timeline */}
+                                            {app.approvals && app.approvals.length > 0 && (
+                                                <div className="mt-6 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-4">Approval Timeline</p>
+                                                    <div className="space-y-3">
+                                                        {app.approvals.map((approval, index) => (
+                                                            <div key={index} className="flex items-start gap-3">
+                                                                <div className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${
+                                                                    approval.decision === 'approved' ? 'bg-emerald-500' : 'bg-rose-500'
+                                                                }`}></div>
+                                                                <div className="flex-1">
+                                                                    <p className="text-xs font-bold text-slate-700 uppercase">
+                                                                        <span className={`${approval.decision === 'approved' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                            {approval.decision}
+                                                                        </span>
+                                                                        {approval.comment && (
+                                                                            <span className="text-slate-500 normal-case italic ml-2">- {approval.comment}</span>
+                                                                        )}
+                                                                    </p>
+                                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                                                                        {new Date(approval.approvedAt || approval.timestamp).toLocaleString()}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* Status Context Alerts */}
-                                            {app.status === 'rejected' && app.review?.comment && (
+                                            {app.status === 'rejected' && (app.review?.comment || app.rejectionReason) && (
                                                 <div className="mt-8 p-5 bg-rose-50 rounded-2xl border border-rose-100 flex items-start gap-4">
                                                     <span className="text-lg">🚫</span>
                                                     <div>
                                                         <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-1">Registrar Intelligence Response</p>
-                                                        <p className="text-sm font-bold text-rose-700 italic leading-relaxed">{app.review.comment}</p>
+                                                        <p className="text-sm font-bold text-rose-700 italic leading-relaxed">{app.review?.comment || app.rejectionReason}</p>
                                                     </div>
                                                 </div>
                                             )}
