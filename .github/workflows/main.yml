@@ -1,0 +1,49 @@
+name: BlockEstate CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  blockchain:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Node.js 18
+      uses: actions/setup-node@v3
+      with:
+        node-version: "18"
+    - name: Install dependencies & Compile Contracts
+      run: |
+        cd blockchain
+        npm install
+        npx hardhat compile
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Node.js 18
+      uses: actions/setup-node@v3
+      with:
+        node-version: "18"
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm install
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Node.js 18
+      uses: actions/setup-node@v3
+      with:
+        node-version: "18"
+    - name: Install frontend dependencies & Build
+      run: |
+        cd frontend
+        npm install
+        npm run build
